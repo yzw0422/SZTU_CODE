@@ -1,0 +1,67 @@
+# ============================================================
+# SZTU_Code 配置文件示例
+# ============================================================
+# 使用方法：
+#   1. 复制此文件为 .sztu_code（项目根目录 或 ~/.sztu_code）
+#   2. 修改 api_key 为你的真实 Key
+#   3. 运行 sztu-code
+#
+# 查找优先级：
+#   ./.sztu_code     ← 项目级（最高）
+#   项目根/.sztu_code ← 基于包位置推断
+#   ~/.sztu_code     ← 用户级（兜底）
+#
+# ⚠️ .sztu_code 已加入 .gitignore，不要提交真实 Key！
+#    推荐用 $ENV_VAR 引用环境变量（见下方 api_key 写法）
+# ============================================================
+
+
+# ---------- Provider ----------
+# Provider 类型：deepseek / openai
+# 也可以填任意值，只要下面的 base_url 是 OpenAI 兼容 API
+[provider]
+
+# 必填：Provider 类型（deepseek / openai / 自定义）
+type = "deepseek"
+
+# 必填：API 密钥
+# 推荐写法：用 $ENV_VAR 引用环境变量（避免明文泄露）
+api_key = "$DEEPSEEK_API_KEY"
+# api_key = "$OPENAI_API_KEY"
+# 也可以直接写明文（仅本地开发用）：
+# api_key = "sk-xxxxxxxxxxxxxxxxxxxxxxxx"
+
+# 可选：模型名
+# 不填则使用 Provider 默认值：
+#   deepseek → deepseek-v4-flash
+#   openai   → gpt-4o-mini
+model = "deepseek-v4-flash"
+
+# 可选：自定义 API Base URL
+# 预设 Provider 会自动填，一般不用改
+# base_url = "https://api.deepseek.com/v1"
+# base_url = "https://api.openai.com/v1"
+# base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"  # 阿里云百炼
+# base_url = "https://api.siliconflow.cn/v1"                      # 硅基流动
+
+
+# ---------- Agent ----------
+[agent]
+
+# 单次对话最大循环次数（模型思考 + 工具调用的轮数上限）
+max_turns = 25
+
+# API 最大输出 token 数
+max_tokens = 4096
+
+
+# ---------- Permissions ----------
+# 工具调用权限控制：allow 自动放行，deny 自动拒绝
+# 匹配格式：工具名 或 "工具名:参数模式"（glob 通配）
+[permissions]
+
+# 自动放行的工具（无需每次确认）
+# allow = ["file_read", "file_write", "bash:git *"]
+
+# 自动拒绝的工具（危险操作）
+# deny = ["bash:rm -rf *", "bash:del *", "file_write:/etc/*"]
