@@ -5,8 +5,9 @@
 ## ✨ 特性
 
 - 🧠 **ReAct 推理循环** — 模型自主决定何时调用工具、何时继续思考
+- 📋 **Plan-Execute 模式** — 复杂任务自动拆解为分步计划，按序执行并汇总结果
 - 🔌 **多 Provider 支持** — DeepSeek、OpenAI（以及任意 OpenAI 兼容 API）
-- 🛠️ **6 个内置工具** — 文件读写编辑、glob 查找、grep 搜索、bash 执行
+- 🛠️ **7 个内置工具** — 文件读写编辑、glob 查找、grep 搜索、bash 执行、制定计划
 - 💬 **流式输出** — Token 级实时显示，打字机体验
 - 🔐 **权限管控** — 工具调用前自动拦截，支持 allow/deny 规则
 - 📊 **Token 统计** — 实时追踪消耗，自动上下文压缩
@@ -51,8 +52,10 @@ sztu_code/
 │   ├── api/              # Provider 抽象层（OpenAI / DeepSeek / ...）
 │   ├── cli/              # 命令行入口 & REPL
 │   ├── context/          # 上下文构建 & 压缩
-│   ├── engine/           # 对话引擎，对外主接口
-│   ├── loop/             # Agentic Loop（ReAct 循环）
+│   ├── engine/           # 对话引擎，对外主接口，编排 ReAct / Plan-Execute
+│   ├── loop/             # 核心循环层
+│   │   ├── loop.py           ReAct 推理循环（AgenticLoop）
+│   │   └── plan_execute.py   Plan-Execute 分步执行循环
 │   ├── permission/       # 权限管理器
 │   ├── tools/            # 工具注册表 & 内置工具实现
 │   └── system_types.py   # 核心数据结构定义
@@ -67,14 +70,15 @@ sztu_code/
 
 ## 🛠️ 内置工具
 
-| 工具 | 用途 |
-|------|------|
-| `file_read` | 读取文件内容，支持 offset/limit 分段 |
-| `file_write` | 创建或覆盖写入文件 |
-| `file_edit` | 精确替换（old_string → new_string） |
-| `glob` | 按通配符查找文件（如 `**/*.py`） |
-| `grep` | 正则搜索文件内容 |
-| `bash` | 执行 shell 命令 |
+| 工具 | 用途 | 阶段 |
+|------|------|------|
+| `file_read` | 读取文件内容，支持 offset/limit 分段 | 通用 |
+| `file_write` | 创建或覆盖写入文件 | 通用 |
+| `file_edit` | 精确替换（old_string → new_string） | 通用 |
+| `glob` | 按通配符查找文件（如 `**/*.py`） | 通用 |
+| `grep` | 正则搜索文件内容 | 通用 |
+| `bash` | 执行 shell 命令 | 通用 |
+| `make_plan` | 制定分步执行计划（JSON 格式） | Planning 阶段 |
 
 ## ⌨️ CLI 命令
 
@@ -118,6 +122,8 @@ max_tokens = 4096       # API 最大输出 token
 
 ## 🏗️ 架构设计
 
+### 整体流程
+
 ```
 用户输入
    │
@@ -134,20 +140,30 @@ max_tokens = 4096       # API 最大输出 token
        ▼
 ┌─────────────┐
 │ AgenticLoop │  ← loop/loop.py       ReAct 推理循环
-└──┬───┬───┬──┘
-   │   │   │
-   ▼   │   ▼
-Provider │  ToolRegistry
-(api/)   │  (tools/)
-         │
-    Permission
-    Manager
-    (permission/)
+└──────┬──────┘
+       │
+       ├── 普通任务 → ReAct 循环直到完成 → 返回结果
+       │
+       └── 复杂任务（LLM 调用 make_plan）
+              │
+              ▼
+         ┌─────────────────┐
+         │ PlanExecuteLoop │  ← loop/plan_execute.py
+         └────────┬────────┘
+                  │
+     ┌────────────┼────────────┐
+     ▼            ▼            ▼
+  Step1 ReAct  Step2 ReAct  StepN ReAct   ← 共享同一 messages
+     │            │            │
+     └────────────┼────────────┘
+                  ▼
+           总结所有步骤 → 返回结果
 ```
 
 核心循环逻辑（简化）：
 
 ```python
+# AgenticLoop.run() — 标准 ReAct
 while turn < max_turns:
     response = provider.send_message(messages, tools)
 
@@ -156,12 +172,23 @@ while turn < max_turns:
 
     if response.stop_reason == "tool_use":
         for tool_use in response.tool_calls:
+            if tool_use.name == "make_plan":
+                return LoopResult(need_plan=True, final_text=plan_json)
+
             result = registry.execute(tool_use)  # 权限检查 → 执行
             tool_results.append(result)
 
         messages.append(assistant_message)        # 本轮模型回复
         messages.append(tool_results_as_user)    # 工具结果作为下一轮输入
         continue
+
+
+# PlanExecuteLoop.run_plan_execute() — 分步执行
+for plan in plans:
+    messages.append(Message("执行计划步骤: " + plan["description"]))
+    executor_loop.run(messages=messages, ...)   # 在共享上下文上继续 ReAct
+
+executor_loop.run(messages=messages, ...)       # 最终总结
 ```
 
 ## 🔒 安全说明
