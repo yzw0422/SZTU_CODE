@@ -46,7 +46,7 @@ class AgenticLoop:
         total_input=0
         total_output=0
         reached_max_turns=False
-
+        need_plan=False
         while turns_used<max_turns:
             turns_used+=1
 
@@ -75,8 +75,24 @@ class AgenticLoop:
                 b for b in response.content if isinstance(b,ToolUseContent)
             ]
             tool_results:list[ToolResultContent] = []
+            make_plan_result: ToolResultContent | None = None
             for tool_use in tool_use_block:
-                tool_results.append(await self._execute_tool(tool_use,callbacks))
+                res = await self._execute_tool(tool_use, callbacks)
+                if tool_use.name == "make_plan":
+                    make_plan_result = res
+                else:
+                    tool_results.append(res)
+
+            if make_plan_result is not None:
+                return LoopResult(
+                    final_text=make_plan_result.content,
+                    need_plan=True,
+                    turn_used=turns_used,
+                    total_tokens=TokenUsage(
+                        input_tokens=total_input,
+                        output_tokens=total_output,
+                    ),
+                )
 
             user_message = Message(
                 role=Role.USER,
@@ -88,7 +104,7 @@ class AgenticLoop:
             reached_max_turns=True
 
         #提取最终文本回复
-        final_text = self._extract_final_text(messages)
+        final_text = AgenticLoop.extract_final_text(messages)
 
         if callbacks and callbacks.on_complete:
             callbacks.on_complete("")
@@ -164,7 +180,8 @@ class AgenticLoop:
                 content=error_result.content,
                 is_error=True,
             )
-    def _extract_final_text(self, messages: list[Message]) -> str:
+    @staticmethod
+    def extract_final_text(messages: list[Message]) -> str:
         """从消息历史中提取最终文本回复"""
         for msg in reversed(messages):
             if msg.role == Role.ASSISTANT:

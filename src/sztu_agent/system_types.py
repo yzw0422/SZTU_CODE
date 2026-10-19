@@ -110,7 +110,13 @@ class LoopResult:
     turn_used:int=0
     total_tokens:TokenUsage=field(default_factory=TokenUsage)
     reached_max_turns:bool=False
-
+    need_plan:bool=False
+@dataclass
+class Plan:
+    """任务计划"""
+    id:str
+    description:str
+    version:int=0
 class AgentCallbacks(Protocol):
     """Agent 事件回调协议"""
     def on_text_delta(self,text:str):

@@ -5,6 +5,7 @@ from sztu_agent.tools.file_read import FileReadTool
 from sztu_agent.tools.file_write import FileWriteTool
 from sztu_agent.tools.grep import GrepTool
 from sztu_agent.tools.bash import BashTool
+from sztu_agent.tools.make_plan import MakePlanTool
 
 def create_default_tool_registry() -> ToolRegistry:
      registry = ToolRegistry()
@@ -17,7 +18,18 @@ def create_default_tool_registry() -> ToolRegistry:
           BashTool(),
      ])
      return registry
-
+def create_plan_tool_registry() -> ToolRegistry:
+     registry = ToolRegistry()
+     registry.register_all([
+          FileEditTool(),
+          GlobTool(),
+          FileReadTool(),
+          FileWriteTool(),
+          GrepTool(),
+          BashTool(),
+          MakePlanTool(),
+     ])
+     return registry
 __all__ = \
      [
           'create_default_tool_registry',
@@ -29,5 +41,6 @@ __all__ = \
           'FileReadTool',
           'FileWriteTool',
           'GrepTool',
-          'BashTool'
+          'BashTool',
+          'MakePlanTool',
       ]

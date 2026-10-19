@@ -21,9 +21,9 @@ from sztu_agent.api.Base import BaseProvider, create_provider
 from sztu_agent.context import ContextBuilder
 from sztu_agent.loop import AgenticLoop
 from sztu_agent.permission import PermissionManager
-from sztu_agent.tools import create_default_tool_registry, Tool
+from sztu_agent.tools import create_default_tool_registry, Tool, create_plan_tool_registry
 from sztu_agent.system_types import EngineConfig, Message, SimpleCallbacks, Role, PermissionRule
-
+from sztu_agent.loop.plan_execute import PlanExecuteLoop
 @dataclass
 class UsageStatus:
     """token 使用统计"""
@@ -80,8 +80,9 @@ class QueryEngine:
             api_key=self._config.api_key,
             model=self._config.model,
             base_url=self._config.base_url,
-            max_tokens=self._config.max_token
+            max_tokens=self._config.max_token,
         )
+
 
         #初始化上下文
         self._context_builder = ContextBuilder(
@@ -91,18 +92,25 @@ class QueryEngine:
 
         #初始工具注册表
         self._tool_registry=create_default_tool_registry()
-
+        self._tool_registry_with_plan_registry=create_plan_tool_registry()
         #初始化权限管理器
         self._permission_manager=PermissionManager(self._config.permission_rules)
 
         #组装AgenticLoop
         self._loop = AgenticLoop(
             api_client=self._provider,
+            tool_registry=self._tool_registry_with_plan_registry,
+            permission=self._permission_manager,
+        )
+
+        #组装PlanExecuteLoop
+        #对话状态
+        self._plan_loop=PlanExecuteLoop(
+            api_client=self._provider,
             tool_registry=self._tool_registry,
             permission=self._permission_manager,
         )
 
-        #对话状态
         self._messages:list[Message]=[]
         self._usage = UsageStatus()
 
@@ -128,12 +136,32 @@ class QueryEngine:
             max_turns=self._config.max_turns,
             callbacks=callbacks,
         )
-        
         #更新token 使用统计 
         self._usage.turn_count+=1
         self._usage.total_input+=result.total_tokens.input_tokens
-        self._usage.total_output+=result.total_tokens.output_tokens  
-        return result
+        self._usage.total_output+=result.total_tokens.output_tokens
+        final_result = result
+        if result.need_plan:
+            try:
+                plans = json.loads(result.final_text)
+                if not isinstance(plans, list):
+                    return final_result
+            except (json.JSONDecodeError, TypeError):
+                return final_result
+            plan_result = await self._plan_loop.run_plan_execute(
+                system_prompt=system_prompt,
+                plans=plans,
+                messages=self._messages,
+                max_turns=self._config.max_turns,
+                callbacks=callbacks,
+            )
+            final_result.final_text += "\n" + plan_result.final_text
+            final_result.total_tokens.input_tokens += plan_result.total_tokens.input_tokens
+            final_result.total_tokens.output_tokens += plan_result.total_tokens.output_tokens
+            final_result.turn_used += plan_result.turn_used
+            if plan_result.reached_max_turns:
+                final_result.reached_max_turns = True
+        return final_result
     def _should_compact(self)->bool:
         """检查是否要自动压缩"""
         total=self._usage.total_input+self._usage.total_output
@@ -183,8 +211,8 @@ class QueryEngine:
         
         
     def register_tool(self,tool:Tool):
-        """注册工具"""
         self._tool_registry.register(tool)
+        self._tool_registry_with_plan_registry.register(tool)
         
     def add_permission(self,rule:PermissionRule):
         """添加权限规则"""
