@@ -22,7 +22,7 @@ from sztu_agent.context import ContextBuilder
 from sztu_agent.loop import AgenticLoop
 from sztu_agent.permission import PermissionManager
 from sztu_agent.tools import create_default_tool_registry, Tool, create_plan_tool_registry
-from sztu_agent.system_types import EngineConfig, Message, SimpleCallbacks, Role, PermissionRule
+from sztu_agent.system_types import EngineConfig, Message, SimpleCallbacks, Role, PermissionRule, TextContent
 from sztu_agent.loop.plan_execute import PlanExecuteLoop
 @dataclass
 class UsageStatus:
@@ -173,7 +173,7 @@ class QueryEngine:
             return
         #1. 压缩历史消息
         result = await self._provider.send_message(system_prompt="请压缩历史消息，保持核心信息",messages=self._messages)
-        summary = result.content[0].content
+        summary = result.content[0].text if isinstance(result.content[0], TextContent) else ""
         last_messages=self._messages[-4:]
         self._messages=[Message(role=Role.ASSISTANT,content=summary)]+last_messages
         self._usage.total_input=result.token_usage.input_tokens
