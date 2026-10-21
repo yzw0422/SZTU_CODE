@@ -137,6 +137,12 @@ class AgentCallbacks(Protocol):
     def on_error(self,error:Exception):
         """错误回调"""
 
+    def on_summary_start(self):
+        """触发摘要回调"""
+
+    def on_summary_end(self):
+        """摘要结束回调"""
+
 @dataclass
 class SimpleCallbacks:
     """简单回调实现"""
@@ -146,4 +152,6 @@ class SimpleCallbacks:
     on_permission_ask:Callable[[str,dict[str,Any]],bool]|None=None
     on_complete:Callable[[str],None]|None=None
     on_error:Callable[[Exception],None]|None=None
+    on_summary_start:Callable[[],None]|None=None
+    on_summary_end:Callable[[],None]|None=None
 

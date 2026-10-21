@@ -102,12 +102,13 @@ def create_provider(
             base_url = preset["base_url"]
         provider = "openai"
 
-    if provider in ("openai", "anthropic"):
-        return OpenAIProvider(
+    if provider == "anthropic":
+        from sztu_agent.api.anthropic_provider import AnthropicProvider
+        return AnthropicProvider(
             api_key=api_key,
-            model=model,
+            model=model or "claude-sonnet-4-20250514",
             max_tokens=max_tokens,
-            base_url=base_url or "",
+            base_url=base_url or None,
         )
 
     return OpenAIProvider(

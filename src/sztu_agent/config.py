@@ -55,7 +55,7 @@ _PROVIDER_PRESETS: dict[str, dict[str, str]] = {
     "deepseek": {
         "provider": "openai",
         "base_url": "https://api.deepseek.com/v1",
-        "default_model": "deepseek-v4-pro",
+        "default_model": "deepseek-v4-flash",
     },
     "mimo": {
         "provider": "openai",
@@ -231,7 +231,7 @@ def build_engine_config(file_config: dict[str, Any]) -> EngineConfig:
         )
     else:
         # 未知类型，当作 openai 兼容
-        provider = "openai"
+        provider = "anthropic"
         default_base_url = None
         default_model = "gpt-4o"
 

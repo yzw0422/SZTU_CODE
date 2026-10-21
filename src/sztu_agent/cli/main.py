@@ -126,11 +126,19 @@ async def run_chat(engine: QueryEngine, user_input: str) -> None:
         preview = result.content[:80].replace("\n", " ")
         print(colorize(Colors.DIM, f"  {status} {preview}..."))
 
+    def on_summary_start() -> None:
+        print(colorize(Colors.YELLOW, "\n  📦 触发上下文压缩中..."))
+
+    def on_summary_end() -> None:
+        print(colorize(Colors.GREEN, "  ✓ 压缩完成\n"))
+
     callbacks = SimpleCallbacks(
         on_text_delta=on_text_delta,
         on_tool_start=on_tool_start,
         on_tool_end=on_tool_end,
         on_permission_ask=ask_permission,
+        on_summary_start=on_summary_start,
+        on_summary_end=on_summary_end,
     )
 
     result = await engine.chat(user_input, callbacks=callbacks)
@@ -164,7 +172,7 @@ async def async_main() -> None:
     print("")
 
     # 信息卡片
-    print(colorize(Colors.BOLD, "  SZTU_Code") + colorize(Colors.DIM, " v0.2.0"))
+    print(colorize(Colors.BOLD, "  SZTU_Code") + colorize(Colors.DIM, " v0.2.1"))
     print("")
     print(colorize(Colors.DIM, "  Provider  : ") + colorize(Colors.GREEN, engine.provider_info))
     if config.base_url:
@@ -175,7 +183,7 @@ async def async_main() -> None:
     print(colorize(Colors.DIM, "  ────────────────────────────────────────────────"))
     print("")
     print(colorize(Colors.DIM, "  输入需求开始对话"))
-    print(colorize(Colors.DIM, "  /quit 退出  /clear 清空  /usage 消耗  /model 模型"))
+    print(colorize(Colors.DIM, "  /quit 退出  /clear 清空  /usage 消耗  /model 模型  /compact 压缩"))
     print("")
 
     while True:
@@ -205,6 +213,9 @@ async def async_main() -> None:
                 Colors.CYAN,
                 f"\nToken 消耗: input={usage.total_input}, output={usage.total_output}, turns={usage.turn_count}\n",
             ))
+            continue
+        if trimmed == "/compact":
+            await engine.auto_compact()
             continue
 
         if trimmed == "/model":
